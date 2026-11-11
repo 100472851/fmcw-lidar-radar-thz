@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FMCW: Del LiDAR al Radar THz — Jacobo & Diego</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff8a;
+    --text: #e8edf5;
+    --text-dim: #6b7a99;
+    --lidar: #00d4ff;
+    --thz: #ff6b35;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  /* ── SLIDE CONTAINER ── */
+  .deck {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    padding: 40px 52px;
+    flex-direction: column;
+    gap: 0;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .slide.active {
+    display: flex;
+    opacity: 1;
+  }
+
+  /* grid bg */
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── NAVIGATION ── */
+  .nav {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(17,24,39,0.92);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 40px;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+  .nav button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .nav button:disabled { opacity: 0.25; cursor: default; }
+  .slide-counter {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 60px;
+    text-align: center;
+  }
+  .dots {
+    display: flex;
+    gap: 6px;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dot.active { background: var(--accent); transform: scale(1.4); }
+
+  /* ── COMMON ELEMENTS ── */
+  .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 3px 10px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-bottom: 16px;
+  }
+  .tag.thz { color: var(--thz); border-color: var(--thz); }
+  .tag.green { color: var(--accent3); border-color: var(--accent3); }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(22px, 3vw, 34px);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  h2 {
+    font-family: var(--mono);
+    font-size: clamp(16px, 2.2vw, 24px);
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 20px;
+  }
+  h2.thz { color: var(--thz); }
+  h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  p { font-size: 14px; line-height: 1.65; color: #c5cfe0; }
+
+  .highlight { color: var(--accent); font-weight: 600; }
+  .highlight.thz { color: var(--thz); }
+  .highlight.green { color: var(--accent3); }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin: 20px 0;
+  }
+
+  /* ── SLIDE 1: PORTADA ── */
+  #s1 {
+    justify-content: center;
+    align-items: flex-start;
+  }
+  .title-eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .title-main {
+    font-family: var(--mono);
+    font-size: clamp(26px, 3.5vw, 44px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+  .title-sub {
+    font-family: var(--mono);
+    font-size: clamp(13px, 1.6vw, 18px);
+    color: var(--accent);
+    margin-bottom: 32px;
+    font-weight: 400;
+  }
+  .authors-block {
+    display: flex;
+    gap: 40px;
+    margin-top: 20px;
+  }
+  .author-card {
+    border-left: 2px solid var(--accent);
+    padding-left: 14px;
+  }
+  .author-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .author-nia {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .profs-block {
+    margin-top: 28px;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+  }
+  .big-accent {
+    position: absolute;
+    right: 52px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    font-size: clamp(80px, 12vw, 140px);
+    font-weight: 700;
+    color: rgba(0,212,255,0.04);
+    letter-spacing: -0.05em;
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  /* ── SLIDE 2: MOTIVACIÓN ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    flex: 1;
+  }
+  .three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    flex: 1;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card.accent-left { border-left: 3px solid var(--accent); }
+  .card.thz-left { border-left: 3px solid var(--thz); }
+  .card.green-left { border-left: 3px solid var(--accent3); }
+  .card.danger-left { border-left: 3px solid #ff4444; }
+  .card-icon {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  .card-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  .card-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #9aacc0;
+  }
+
+  /* ── STAT BOXES ── */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+  .stat {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: clamp(18px, 2.5vw, 28px);
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-value.thz { color: var(--thz); }
+  .stat-value.green { color: var(--accent3); }
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── EQUATION BLOCK ── */
+  .eq-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent3);
+    margin: 10px 0;
+  }
+  .eq-block span { color: var(--text-dim); font-size: 11px; }
+
+  /* ── COMPARISON TABLE ── */
+  .comp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  .comp-table th {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+    color: var(--text-dim);
+  }
+  .comp-table th.lidar-col { color: var(--lidar); }
+  .comp-table th.thz-col { color: var(--thz); }
+  .comp-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: #b0bcd0;
+    vertical-align: middle;
+  }
+  .comp-table td.lidar-val { color: var(--lidar); font-family: var(--mono); font-weight: 600; }
+  .comp-table td.thz-val { color: var(--thz); font-family: var(--mono); font-weight: 600; }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+  .badge.red { background: rgba(255,68,68,0.15); color: #ff6b6b; border: 1px solid rgba(255,68,68,0.3); }
+  .badge.green { background: rgba(57,255,138,0.1); color: var(--accent3); border: 1px solid rgba(57,255,138,0.3); }
+
+  /* ── ARCHITECTURE DIAGRAM ── */
+  .arch-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    justify-content: center;
+  }
+  .arch-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 64px;
+  }
+  .arch-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    width: 90px;
+    flex-shrink: 0;
+    text-align: right;
+    padding-right: 14px;
+  }
+  .arch-label.lidar { color: var(--lidar); }
+  .arch-label.thz { color: var(--thz); }
+  .arch-blocks {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+  }
+  .arch-block {
+    height: 52px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: var(--mono);
+    white-space: nowrap;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .arch-block .ab-title { font-weight: 700; font-size: 11px; }
+  .arch-block .ab-sub { font-size: 9px; opacity: 0.7; margin-top: 2px; }
+  .arch-block.lidar-bg { background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25); color: var(--lidar); }
+  .arch-block.thz-bg { background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.25); color: var(--thz); }
+  .arch-block.neutral { background: var(--surface2); border: 1px solid var(--border); color: #9aacc0; }
+  .arch-block.warn { background: rgba(255,68,68,0.07); border: 1px solid rgba(255,68,68,0.25); color: #ff8080; }
+  .arch-block.ok { background: rgba(57,255,138,0.07); border: 1px solid rgba(57,255,138,0.25); color: var(--accent3); }
+  .arch-arrow {
+    width: 28px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 16px;
+  }
+  .arch-dsp {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 20px;
+    margin: 6px 0 0 90px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #9aacc0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .arch-dsp-label {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── LINK BUDGET FLOW ── */
+  .lbflow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+  .lbnode {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+  .lbnode .lbn-title { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text); text-transform: uppercase; }
+  .lbnode .lbn-eq { font-family: var(--mono); font-size: 10px; color: var(--accent3); margin-top: 4px; }
+  .lbnode .lbn-note { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+  .lbarrow {
+    width: 32px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 18px;
+    color: var(--text-dim);
+  }
+
+  /* ── CONCLUSION ITEMS ── */
+  .conclusion-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    justify-content: center;
+  }
+  .conc-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+  }
+  .conc-num {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    opacity: 0.4;
+    min-width: 32px;
+    line-height: 1;
+    margin-top: 2px;
+  }
+  .conc-text { font-size: 13px; line-height: 1.6; color: #b0bcd0; }
+  .conc-text strong { color: var(--text); font-weight: 600; }
+
+  /* ── SLIDE HEADER ── */
+  .slide-header {
+    margin-bottom: 20px;
+  }
+  .slide-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: var(--accent);
+    transition: width 0.35s ease;
+    z-index: 200;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* ── FMCW MINI DIAGRAM ── */
+  .fmcw-diagram {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    flex: 1;
+  }
+
+  /* keyboard hint */
+  .key-hint {
+    position: fixed;
+    top: 16px;
+    right: 20px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<div class="key-hint">← → para navegar</div>
+
+<div class="deck" id="deck">
+
+  <!-- ══ SLIDE 1: PORTADA ══ -->
+  <div class="slide active" id="s1">
+    <div class="big-accent">THz</div>
+    <div style="margin-top: auto; margin-bottom: auto;">
+      <div class="title-eyebrow">UC3M · Fotónica · Grado en Ing. de Telecomunicaciones</div>
+      <div class="title-main">Análisis de Detección<br>Coherente FMCW</div>
+      <div class="title-sub">Del LiDAR al Radar Fotónico THz para<br>Aterrizajes en Entornos Visuales Degradados</div>
+      <div class="divider"></div>
+      <div class="authors-block">
+        <div class="author-card">
+          <div class="author-name">Jacobo Gutiérrez Pérez-España</div>
+          <div class="author-nia">NIA: 100472851</div>
+        </div>
+        <div class="author-card">
+          <div class="author-name">Diego de Andrés Casanova</div>
+          <div class="author-nia">NIA: 100496145</div>
+        </div>
+      </div>
+      <div class="profs-block" style="margin-top:22px;">
+        Tutores: G. Carpintero Del Barrio &nbsp;·&nbsp; H. Lamela Rivera
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 2: MOTIVACIÓN ══ -->
+  <div class="slide" id="s2">
+    <div class="slide-header">
+      <div class="slide-num">02 / 08 &nbsp;—&nbsp; MOTIVACIÓN</div>
+      <h2>¿Por qué este trabajo?</h2>
+    </div>
+    <div class="two-col" style="flex:1;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card accent-left">
+          <div class="card-icon">🚁</div>
+          <div class="card-title">El problema: brownout</div>
+          <div class="card-body">Los rotores de los eVTOL levantan nubes de polvo (<em>brownout</em>) durante el aterrizaje. Los <strong style="color:var(--text)">últimos 100 m</strong> son la fase más crítica y peligrosa del vuelo.</div>
+        </div>
+        <div class="card danger-left">
+          <div class="card-icon">❌</div>
+          <div class="card-title">Fallo de los sensores actuales</div>
+          <div class="card-body">Las cámaras se saturan. El LiDAR ToF recibe <em>ecos falsos</em> de la nube. Los radares mmWave penetran, pero carecen de resolución milimétrica.</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card green-left">
+          <div class="card-icon">💡</div>
+          <div class="card-title">Nuestra propuesta</div>
+          <div class="card-body">Arquitectura <strong style="color:var(--accent3)">híbrida FMCW dual</strong>: LiDAR a 1550 nm como sensor principal + Radar Fotónico THz a 1,65 THz como sistema de seguridad crítico. Ambos con detección homodina coherente.</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="stat-value">100 m</div>
+            <div class="stat-label">Fase crítica</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value thz">1,65</div>
+            <div class="stat-label">THz Radar</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value green">90 µm</div>
+            <div class="stat-label">Resolución THz</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 3: DISEÑO — ARQUITECTURA ══ -->
+  <div class="slide" id="s3">
+    <div class="slide-header">
+      <div class="slide-num">03 / 08 &nbsp;—&nbsp; DISEÑO DEL SISTEMA</div>
+      <h2>Arquitectura Híbrida FMCW</h2>
+    </div>
+    <div class="arch-container">
+      <div class="arch-row">
+        <div class="arch-label lidar">LiDAR<br>1550 nm</div>
+        <div class="arch-blocks">
+          <div class="arch-block lidar-bg">
+            <div class="ab-title">VCSEL</div>
+            <div class="ab-sub">chirp directo · Eye-safe</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block neutral">
+            <div class="ab-title">Divisor 90/10</div>
+            <div class="ab-sub">brazo señal / LO</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block warn">
+            <div class="ab-title">Entorno</div>
+            <div class="ab-sub">Dispersión Mie ⚠</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block lidar-bg">
+            <div class="ab-title">Receptor homodino</div>
+            <div class="ab-sub">mezclador óptico + LO</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-label thz">Radar THz<br>1,65 THz</div>
+        <div class="arch-blocks">
+          <div class="arch-block thz-bg">
+            <div class="ab-title">2× diodos láser</div>
+            <div class="ab-sub">sintonizables · fotomezclado</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block thz-bg">
+            <div class="ab-title">Fotomezclador TX</div>
+            <div class="ab-sub">genera señal THz CW</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block ok">
+            <div class="ab-title">Entorno</div>
+            <div class="ab-sub">Rayleigh ✓ penetra</div>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-block thz-bg">
+            <div class="ab-title">Fotomezclador RX</div>
+            <div class="ab-sub">receptor coherente + LO</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-dsp">
+        <div class="arch-dsp-label">DSP compartido</div>
+        <span style="color:var(--text-dim);font-size:11px;font-family:var(--mono)">FFT triangular → extracción simultánea de distancia r y velocidad v</span>
+      </div>
+      <div style="margin-top:16px;">
+        <p style="font-size:12px;color:var(--text-dim);font-family:var(--mono)">
+          Ambos canales comparten <span style="color:var(--accent)">principio FMCW</span>, <span style="color:var(--accent)">oscilador local coherente</span> y <span style="color:var(--accent)">shot-noise limit</span> — base para futura unificación de hardware en PIC sobre InP.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 4: DISEÑO — LiDAR ══ -->
+  <div class="slide" id="s4">
+    <div class="slide-header">
+      <div class="slide-num">04 / 08 &nbsp;—&nbsp; DISEÑO DEL SISTEMA · LiDAR</div>
+      <h2>Canal LiDAR FMCW a 1550 nm</h2>
+    </div>
+    <div class="two-col" style="flex:1;">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card accent-left">
+          <div class="card-title">¿Por qué VCSEL?</div>
+          <div class="card-body">
+            Cavidad activa <strong style="color:var(--accent)">1–2 µm</strong> → RSL enorme → emisión <strong style="color:var(--accent)">monomodo longitudinal</strong> garantizada. Emisión perpendicular → haz simétrico → arrays 2D factibles. Chirp directo por inyección de corriente, sin moduladores externos.
+          </div>
+        </div>
+        <div class="card neutral">
+          <div class="card-title">FP vs DFB vs VCSEL</div>
+          <table style="width:100%;font-size:11px;font-family:var(--mono);color:#9aacc0;margin-top:6px;border-collapse:collapse;">
+            <tr style="color:var(--text-dim);border-bottom:1px solid var(--border);">
+              <td style="padding:4px 6px"></td><td style="padding:4px 6px">FP</td><td style="padding:4px 6px">VCSEL</td><td style="padding:4px 6px">DFB</td>
+            </tr>
+            <tr><td style="padding:4px 6px;color:var(--text-dim)">Potencia</td><td style="padding:4px 6px">−25 dB</td><td style="padding:4px 6px;color:var(--accent)">−20 dB</td><td style="padding:4px 6px">−10 dB</td></tr>
+            <tr><td style="padding:4px 6px;color:var(--text-dim)">BW mod.</td><td style="padding:4px 6px">&gt;1 GHz</td><td style="padding:4px 6px;color:var(--accent)">&gt;2.5 GHz</td><td style="padding:4px 6px">~10 GHz</td></tr>
+            <tr><td style="padding:4px 6px;color:var(--text-dim)">NF</td><td style="padding:4px 6px">~29 dB</td><td style="padding:4px 6px;color:var(--accent)">~23 dB</td><td style="padding:4px 6px">~32 dB</td></tr>
+            <tr><td style="padding:4px 6px;color:var(--text-dim)">Array 2D</td><td style="padding:4px 6px">✗</td><td style="padding:4px 6px;color:var(--accent)">✓</td><td style="padding:4px 6px">✗</td></tr>
+          </table>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card accent-left">
+          <div class="card-title">Receptor homodino — por qué filtra el brownout</div>
+          <div class="card-body" style="font-size:12px;">
+            La fotocorriente útil solo se genera cuando la señal reflejada interfiere <strong style="color:var(--accent)">constructivamente con el LO</strong>. Los fotones incoherentes de la nube de polvo promedian a cero: no generan batido. El sistema rechaza el ruido de forma intrínseca, sin filtro electrónico.
+          </div>
+        </div>
+        <div class="card neutral" style="gap:6px;">
+          <div class="card-title">Modulación FMCW triangular</div>
+          <div class="card-body" style="font-size:12px;">Rampa ascendente <span style="color:var(--accent);font-family:var(--mono)">f_up = |γ·2r/c − f_D|</span> y descendente <span style="color:var(--accent);font-family:var(--mono)">f_down = |γ·2r/c + f_D|</span> permiten extraer r y v simultáneamente vía FFT.</div>
+          <div class="eq-block" style="margin-top:6px;">
+            r = c(f_down + f_up) / 4γ &nbsp;&nbsp; <span>distancia</span><br>
+            v = λ(f_down − f_up) / 4 &nbsp;&nbsp; <span>velocidad</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 5: DISEÑO — RADAR THz ══ -->
+  <div class="slide" id="s5">
+    <div class="slide-header">
+      <div class="slide-num">05 / 08 &nbsp;—&nbsp; DISEÑO DEL SISTEMA · RADAR THz</div>
+      <h2 class="thz">Canal Radar Fotónico THz a 1,65 THz</h2>
+    </div>
+    <div class="two-col" style="flex:1;">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card thz-left">
+          <div class="card-title">Generación por fotomezclado</div>
+          <div class="card-body" style="font-size:12px;">
+            Dos diodos láser sintonizables emiten a frecuencias ópticas <strong style="color:var(--thz)">ν₁</strong> y <strong style="color:var(--thz)">ν₂</strong>. Un fotodiodo UTC combina ambas señales: la fotocorriente oscila exactamente a la frecuencia diferencia <strong style="color:var(--thz)">f_THz = ν₁ − ν₂</strong>. Así se traslada la agilidad del dominio óptico a la banda THz.
+          </div>
+        </div>
+        <div class="card thz-left">
+          <div class="card-title">Corrección de no linealidad: K-clocking</div>
+          <div class="card-body" style="font-size:12px;">
+            Un interferómetro Mach-Zehnder desbalanceado genera franjas equiespaciadas en el dominio óptico que sirven como <strong style="color:var(--thz)">reloj óptico auxiliar</strong> para remuestrear la señal antes de la FFT y garantizar la linealidad exacta del barrido.
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card ok" style="border-left-color:var(--accent3);">
+          <div class="card-title" style="color:var(--accent3);">Dispersión Rayleigh: λ >> d</div>
+          <div class="card-body" style="font-size:12px;">
+            λ_THz = <strong style="color:var(--accent3)">181 µm</strong> >> d_partícula ≈ 1–100 µm<br>
+            La sección eficaz escala como σ ∝ (d/λ)⁴ → prácticamente cero. El coeficiente α queda casi nulo. El factor <span style="color:var(--accent3);font-family:var(--mono)">e^(−2αr) ≈ 1</span>.
+          </div>
+        </div>
+        <div class="card thz-left">
+          <div class="card-title">Basado en Mohammadzadeh et al. 2023</div>
+          <div class="card-body" style="font-size:12px;">
+            BW de modulación <strong style="color:var(--thz)">&gt;1,65 THz</strong> — un orden de magnitud superior a radares MMIC. Tasa de muestreo de hasta <strong style="color:var(--thz)">560 Hz</strong> (para BW = 600 GHz). Resolución teórica: <strong style="color:var(--thz)">90 µm</strong>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 6: BALANCE DE POTENCIAS ══ -->
+  <div class="slide" id="s6">
+    <div class="slide-header">
+      <div class="slide-num">06 / 08 &nbsp;—&nbsp; BALANCE DE POTENCIAS Y SNR</div>
+      <h2>Link Budget — Shot-Noise Limit</h2>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;flex:1;">
+      <!-- Flujo de potencia -->
+      <div class="lbflow">
+        <div class="lbnode">
+          <div class="lbn-title">P_TX</div>
+          <div class="lbn-eq">Laser CW</div>
+          <div class="lbn-note">transmisor</div>
+        </div>
+        <div class="lbarrow">→</div>
+        <div class="lbnode" style="border-color:rgba(255,107,53,0.3);">
+          <div class="lbn-title">Atenuación</div>
+          <div class="lbn-eq" style="color:var(--thz);">e^(−2αr)</div>
+          <div class="lbn-note">α alto: LiDAR ⚠</div>
+        </div>
+        <div class="lbarrow">→</div>
+        <div class="lbnode">
+          <div class="lbn-title">P_RX</div>
+          <div class="lbn-eq" style="font-size:9px;">P_TX·η_TX·η_RX·(ρ/π)·(A_RX/r²)·e^(−2αr)</div>
+          <div class="lbn-note">señal reflejada</div>
+        </div>
+        <div class="lbarrow">→</div>
+        <div class="lbnode" style="border-color:rgba(0,212,255,0.3);">
+          <div class="lbn-title">Mezcla P_LO</div>
+          <div class="lbn-eq">I_sig = 2Rₑ·√(P_LO·P_RX)</div>
+          <div class="lbn-note">interferencia coherente</div>
+        </div>
+        <div class="lbarrow">→</div>
+        <div class="lbnode" style="border-color:rgba(57,255,138,0.3);">
+          <div class="lbn-title">SNR</div>
+          <div class="lbn-eq" style="color:var(--accent3);">η·P_RX / (h·ν·B_rx)</div>
+          <div class="lbn-note">P_LO se cancela ✓</div>
+        </div>
+      </div>
+      <!-- Derivación clave -->
+      <div class="two-col" style="flex:1;">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div class="card accent-left">
+            <div class="card-title">¿Por qué P_LO se cancela?</div>
+            <div class="card-body" style="font-size:12px;">
+              S ∝ I²_sig ∝ P_LO · P_RX<br>
+              N = 2q · (Rₑ · P_LO) · B_rx → también ∝ P_LO<br>
+              Al dividir: <strong style="color:var(--accent)">SNR = 2Rₑ·P_RX / (q·B_rx)</strong><br>
+              Sustituyendo Rₑ = ηq/hν →<br>
+              <strong style="color:var(--accent)">SNR = η·P_RX / (h·ν·B_rx)</strong>
+            </div>
+          </div>
+          <div class="card neutral">
+            <div class="card-title">Shot-noise limit: consecuencia práctica</div>
+            <div class="card-body" style="font-size:12px;">
+              Con P_RX en el orden de <strong style="color:var(--accent)">fracciones de picovatio</strong> se puede mantener SNR &gt; 15 dB. El ruido térmico del circuito queda completamente enmascarado por el ruido cuántico del LO.
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div class="card thz-left" style="flex:1;">
+            <div class="card-title">La clave: α diferente, SNR igual</div>
+            <div class="card-body" style="font-size:12px;">
+              El marco matemático de la SNR es <strong style="color:var(--thz)">idéntico</strong> para LiDAR y Radar THz. La ventaja del THz es exclusivamente que en brownout su coeficiente <strong style="color:var(--thz)">α ≈ 0</strong> → P_RX no colapsa → SNR se mantiene sobre umbral.
+            </div>
+          </div>
+          <div class="stat-row">
+            <div class="stat">
+              <div class="stat-value">~0</div>
+              <div class="stat-label">α THz (brownout)</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value thz">&gt;&gt;0</div>
+              <div class="stat-label">α LiDAR (brownout)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 7: COMPARATIVA ══ -->
+  <div class="slide" id="s7">
+    <div class="slide-header">
+      <div class="slide-num">07 / 08 &nbsp;—&nbsp; RESULTADOS</div>
+      <h2>Comparativa de Rendimiento</h2>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px;flex:1;">
+      <table class="comp-table">
+        <tr>
+          <th>Parámetro</th>
+          <th class="lidar-col">LiDAR FMCW 1550 nm</th>
+          <th class="thz-col">Radar Fotónico THz 1,65 THz</th>
+        </tr>
+        <tr>
+          <td>Longitud de onda λ</td>
+          <td class="lidar-val">1,55 µm</td>
+          <td class="thz-val">181,8 µm</td>
+        </tr>
+        <tr>
+          <td>Ancho de banda B</td>
+          <td class="lidar-val">100 GHz</td>
+          <td class="thz-val">1,65 THz</td>
+        </tr>
+        <tr>
+          <td>Resolución teórica ΔR</td>
+          <td class="lidar-val">1,5 mm</td>
+          <td class="thz-val">90 µm ✓</td>
+        </tr>
+        <tr>
+          <td>Régimen dispersión brownout</td>
+          <td><span class="badge red">Mie — bloqueo</span></td>
+          <td><span class="badge green">Rayleigh — penetración</span></td>
+        </tr>
+        <tr>
+          <td>Alcance operativo</td>
+          <td class="lidar-val">0–100 m (aire limpio)</td>
+          <td class="thz-val">0–20 m (brownout)</td>
+        </tr>
+        <tr>
+          <td>Límite de ruido</td>
+          <td class="lidar-val">Shot-Noise Limit</td>
+          <td class="thz-val">Shot-Noise Limit</td>
+        </tr>
+      </table>
+      <div class="two-col">
+        <div class="card accent-left">
+          <div class="card-title">¿Por qué no solo THz?</div>
+          <div class="card-body" style="font-size:12px;">A 1,65 THz la absorción molecular por vapor de agua es extrema en condiciones normales. El alcance máximo útil es ~20 m. Para la fase de aproximación (100 m) el LiDAR es imprescindible.</div>
+        </div>
+        <div class="card green-left">
+          <div class="card-title">Complementariedad perfecta</div>
+          <div class="card-body" style="font-size:12px;">LiDAR: sensor principal de 100 m a 20 m en aire limpio. THz: sensor de seguridad en los últimos 20 m cuando el brownout bloquea la óptica. Siempre hay al menos un sensor operativo.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SLIDE 8: CONCLUSIONES ══ -->
+  <div class="slide" id="s8">
+    <div class="slide-header">
+      <div class="slide-num">08 / 08 &nbsp;—&nbsp; CONCLUSIONES</div>
+      <h2>Conclusiones</h2>
+    </div>
+    <div class="conclusion-list">
+      <div class="conc-item">
+        <div class="conc-num">01</div>
+        <div class="conc-text"><strong>Viabilidad técnica demostrada.</strong> La integración VCSEL + fotomezclado coherente genera anchos de banda (1,65 THz) impracticables con electrónica MMIC, sin barrido mecánico.</div>
+      </div>
+      <div class="conc-item">
+        <div class="conc-num">02</div>
+        <div class="conc-text"><strong>El LiDAR FMCW tiene un límite insalvable.</strong> Cuando la densidad de partículas supera las 8–9 longitudes de atenuación, la dispersión de Mie bloquea físicamente la señal. El THz transiciona a Rayleigh y penetra.</div>
+      </div>
+      <div class="conc-item">
+        <div class="conc-num">03</div>
+        <div class="conc-text"><strong>Resolución submilimétrica.</strong> ΔR(THz) = 90 µm frente a ΔR(LiDAR) = 1,5 mm. Ambos operan bajo el Shot-Noise Limit — la SNR es independiente del ruido térmico.</div>
+      </div>
+      <div class="conc-item">
+        <div class="conc-num">04</div>
+        <div class="conc-text"><strong>La arquitectura dual es necesaria y suficiente.</strong> Esta combinación garantiza continuidad operativa absoluta en los 100 m más críticos del vuelo de un eVTOL — base para futura integración en un único PIC sobre InP.</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;background:var(--surface2);border-radius:6px;border-left:3px solid var(--accent3);">
+      <p style="font-size:12px;color:var(--text-dim);font-family:var(--mono);">Nota: validación analítica basada en Mohammadzadeh et al. (2023). Validación experimental: primera línea del trabajo futuro.</p>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- ── NAVIGATION ── -->
+<div class="nav">
+  <button id="prevBtn" onclick="navigate(-1)" disabled>← Anterior</button>
+  <div class="dots" id="dots"></div>
+  <div class="slide-counter" id="counter">1 / 8</div>
+  <button id="nextBtn" onclick="navigate(1)">Siguiente →</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  // Build dots
+  const dotsEl = document.getElementById('dots');
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  }
+
+  function goTo(n) {
+    slides[current].classList.remove('active');
+    dotsEl.children[current].classList.remove('active');
+    current = Math.max(0, Math.min(total - 1, n));
+    slides[current].classList.add('active');
+    dotsEl.children[current].classList.add('active');
+    document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+    document.getElementById('prevBtn').disabled = current === 0;
+    document.getElementById('nextBtn').disabled = current === total - 1;
+    document.getElementById('progress').style.width = `${((current + 1) / total) * 100}%`;
+  }
+
+  function navigate(dir) { goTo(current + dir); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+  });
+
+  // init progress
+  document.getElementById('progress').style.width = `${(1 / total) * 100}%`;
+</script>
+</body>
+</html>
